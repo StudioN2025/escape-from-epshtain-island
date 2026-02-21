@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ОСТРОВ ЭПШТЕЙНА: Часть 1</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #000;
+            font-family: Arial, sans-serif;
+            color: white;
+        }
+        
+        #gameContainer {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        #canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        
+        #ui {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+        
+        .screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .hidden {
+            display: none !important;
+        }
+        
+        button {
+            background-color: #555;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 10px;
+            cursor: pointer;
+            font-size: 18px;
+            pointer-events: auto;
+        }
+        
+        button:hover {
+            background-color: #777;
+        }
+        
+        #dialogueBox {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-15%);
+            width: 70%;
+            background-color: rgba(0, 0, 0, 0.7);
+            border: 2px solid #555;
+            padding: 15px;
+            border-radius: 5px;
+            text-align: center;
+            pointer-events: none;
+        }
+        
+        #inventory {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background-color: rgba(0, 0, 0, 0.7);
+            border: 2px solid #555;
+            padding: 10px;
+            border-radius: 5px;
+            min-width: 150px;
+        }
+        
+        .inventory-item {
+            margin: 5px 0;
+            padding: 5px;
+            background-color: #333;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        
+        .inventory-item:hover {
+            background-color: #555;
+        }
+        
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.7);
+            border-radius: 50%;
+            pointer-events: none;
+        }
+        
+        #interactionHint {
+            position: absolute;
+            top: 70%;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 5px;
+            display: none;
+        }
+        
+        .journal-entry {
+            max-width: 80%;
+            background-color: rgba(50, 50, 50, 0.9);
+            padding: 20px;
+            border-radius: 5px;
+            line-height: 1.5;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="canvas"></canvas>
+        
+        <div id="ui">
+            <div id="startScreen" class="screen">
+                <h1>ОСТРОВ ЭПШТЕЙНА: Часть 1</h1>
+                <p>Хоррор-стелс от первого лица</p>
+                <p>Вы - обычный мужик из Саратова, застрявший на загадочном острове...</p>
+                <button id="startButton">НАЧАТЬ ИГРУ</button>
+            </div>
+            
+            <div id="introScreen" class="screen hidden">
+                <h2>Бля... голова гудит...</h2>
+                <p>Мы вроде рыбачить поплыли... или не мы?</p>
+                <p>А, точно. Лодка, волна, этот долбаный контейнер... Где я?</p>
+                <button id="wakeUpButton">ОТКРЫТЬ ГЛАЗА</button>
+            </div>
+            
+            <div id="dialogueBox">...</div>
+            
+            <div id="inventory">
+                <h3>ИНВЕНТАРЬ</h3>
+                <div id="inventoryItems"></div>
+            </div>
+            
+            <div id="crosshair"></div>
+            
+            <div id="interactionHint">Нажмите E для взаимодействия</div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Game state
+        const gameState = {
+            currentLocation: 'cell', // cell, backyard, shore, basement
+            inventory: [],
+            health: 100,
+            hasWokenUp: false,
+            hasRustyRod: false,
+            hasDiaryPage: false,
+            hasKalash: false,
+            hasKey: false,
+            isGameActive: false,
+            currentDialogue: '',
+            interactingObject: null,
+            showInventory: false
+        };
+
+        // DOM Elements
+        const canvas = document.getElementById('canvas');
+        const startScreen = document.getElementById('startScreen');
+        const introScreen = document.getElementById('introScreen');
+        const startButton = document.getElementById('startButton');
+        const wakeUpButton = document.getElementById('wakeUpButton');
+        const dialogueBox = document.getElementById('dialogueBox');
+        const inventoryDiv = document.getElementById('inventory');
+        const inventoryItemsDiv = document.getElementById('inventoryItems');
+        const interactionHint = document.getElementById('interactionHint');
+
+        // Three.js variables
+        let scene, camera, renderer;
+        let objects = [];
+        let raycaster = new THREE.Raycaster();
+        let mouse = new THREE.Vector2();
+        let moveForward = false;
+        let moveBackward = false;
+        let moveLeft = false;
+        let moveRight = false;
+        let canJump = false;
+        let prevTime = performance.now();
+        let velocity = new THREE.Vector3();
+        let direction = new THREE.Vector3();
+
+        // Initialize game
+        function init() {
+            // Set up Three.js scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x111111);
+            scene.fog = new THREE.Fog(0x111111, 10, 20);
+
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.y = 1.6;
+
+            renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0x606060);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(1, 1, 0.5).normalize();
+            scene.add(directionalLight);
+
+            // Create game environments
+            createCellEnvironment();
+            
+            // Event listeners
+            setupEventListeners();
+
+            // Start animation loop
+            animate();
+        }
+
+        function createCellEnvironment() {
+            // Floor
+            const floorGeometry = new THREE.PlaneGeometry(10, 10);
+            const floorMaterial = new THREE.MeshStandardMaterial({ color: 0x444444, roughness: 0.8 });
+            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+            floor.rotation.x = -Math.PI / 2;
+            floor.position.y = 0;
+            scene.add(floor);
+            objects.push(floor);
+
+            // Walls
+            const wallMaterial = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.9 });
+            
+            // Back wall
+            const backWall = new THREE.Mesh(
+                new THREE.BoxGeometry(10, 3, 0.2),
+                wallMaterial
+            );
+            backWall.position.z = -5;
+            backWall.position.y = 1.5;
+            scene.add(backWall);
+            objects.push(backWall);
+
+            // Left wall
+            const leftWall = new THREE.Mesh(
+                new THREE.BoxGeometry(0.2, 3, 10),
+                wallMaterial
+            );
+            leftWall.position.x = -5;
+            leftWall.position.y = 1.5;
+            scene.add(leftWall);
+            objects.push(leftWall);
+
+            // Right wall
+            const rightWall = new THREE.Mesh(
+                new THREE.BoxGeometry(0.2, 3, 10),
+                wallMaterial
+            );
+            rightWall.position.x = 5;
+            rightWall.position.y = 1.5;
+            scene.add(rightWall);
+            objects.push(rightWall);
+
+            // Ceiling
+            const ceiling = new THREE.Mesh(
+                new THREE.BoxGeometry(10, 0.2, 10),
+                wallMaterial
+            );
+            ceiling.position.y = 3;
+            scene.add(ceiling);
+            objects.push(ceiling);
+
+            // Bed
+            const bedGeometry = new THREE.BoxGeometry(1.5, 0.3, 2);
+            const bedMaterial = new THREE.MeshStandardMaterial({ color: 0x555555 });
+            const bed = new THREE.Mesh(bedGeometry, bedMaterial);
+            bed.position.set(-3, 0.15, 3);
+            scene.add(bed);
+            objects.push(bed);
+
+            // Table
+            const tableGeometry = new THREE.BoxGeometry(1, 0.8, 1);
+            const tableMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
+            const table = new THREE.Mesh(tableGeometry, tableMaterial);
+            table.position.set(0, 0.4, 3);
+            scene.add(table);
+            objects.push(table);
+
+            // Bottle on table
+            const bottleGeometry = new THREE.CylinderGeometry(0.1, 0.1, 0.4, 16);
+            const bottleMaterial = new THREE.MeshStandardMaterial({ color: 0x777777 });
+            const bottle = new THREE.Mesh(bottleGeometry, bottleMaterial);
+            bottle.position.set(0, 0.8, 3);
+            scene.add(bottle);
+            objects.push(bottle);
+
+            // Bowl on table
+            const bowlGeometry = new THREE.CylinderGeometry(0.3, 0.3, 0.1, 16);
+            const bowlMaterial = new THREE.MeshStandardMaterial({ color: 0x666666 });
+            const bowl = new THREE.Mesh(bowlGeometry, bowlMaterial);
+            bowl.position.set(0.3, 0.7, 3.2);
+            scene.add(bowl);
+            objects.push(bowl);
+
+            // Rusty rod (initially hidden, revealed later)
+            const rodGeometry = new THREE.CylinderGeometry(0.05, 0.05, 1, 8);
+            const rodMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
+            const rod = new THREE.Mesh(rodGeometry, rodMaterial);
+            rod.position.set(0, 0.5, 0);
+            rod.visible = false;
+            scene.add(rod);
+            objects.push(rod);
+
+            // Diary page (initially hidden)
+            const diaryGeometry = new THREE.PlaneGeometry(0.5, 0.7);
+            const diaryMaterial = new THREE.MeshStandardMaterial({ color: 0xF5DEB3 });
+            const diary = new THREE.Mesh(diaryGeometry, diaryMaterial);
+            diary.position.set(0, 0.5, 0);
+            diary.visible = false;
+            scene.add(diary);
+            objects.push(diary);
+
+            // Window with bars (high up)
+            const windowFrameGeometry = new THREE.BoxGeometry(2, 1, 0.1);
+            const windowFrameMaterial = new THREE.MeshStandardMaterial({ color: 0x222222 });
+            const windowFrame = new THREE.Mesh(windowFrameGeometry, windowFrameMaterial);
+            windowFrame.position.set(0, 2.5, -4.95);
+            scene.add(windowFrame);
+            objects.push(windowFrame);
+
+            // Bars for window
+            for (let i = 0; i < 5; i++) {
+                const barGeometry = new THREE.CylinderGeometry(0.05, 0.05, 0.9, 8);
+                const barMaterial = new THREE.MeshStandardMaterial({ color: 0x333333 });
+                const bar = new THREE.Mesh(barGeometry, barMaterial);
+                bar.position.set(-0.8 + i * 0.4, 2.5, -4.9);
+                bar.rotation.z = Math.PI / 2;
+                scene.add(bar);
+                objects.push(bar);
+            }
+
+            // Sky outside window (simulated)
+            const skyGeometry = new THREE.SphereGeometry(500, 32, 32);
+            const skyMaterial = new THREE.MeshBasicMaterial({
+                color: 0x87CEEB,
+                side: THREE.BackSide
+            });
+            const sky = new THREE.Mesh(skyGeometry, skyMaterial);
+            sky.position.copy(windowFrame.position);
+            sky.position.z -= 10;
+            scene.add(sky);
+
+            // Rags pile
+            const ragsGeometry = new THREE.CylinderGeometry(0.8, 0.8, 0.2, 16);
+            const ragsMaterial = new THREE.MeshStandardMaterial({ color: 0x777777 });
+            const rags = new THREE.Mesh(ragsGeometry, ragsMaterial);
+            rags.position.set(3, 0.1, 0);
+            scene.add(rags);
+            objects.push(rags);
+
+            // Chest (for rusty rod and diary page)
+            const chestGeometry = new THREE.BoxGeometry(0.8, 0.5, 0.6);
+            const chestMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
+            const chest = new THREE.Mesh(chestGeometry, chestMaterial);
+            chest.position.set(3, 0.25, 0);
+            scene.add(chest);
+            objects.push(chest);
+        }
+
+        function setupEventListeners() {
+            startButton.addEventListener('click', () => {
+                startScreen.classList.add('hidden');
+                introScreen.classList.remove('hidden');
+            });
+
+            wakeUpButton.addEventListener('click', () => {
+                introScreen.classList.add('hidden');
+                gameState.isGameActive = true;
+                
+                // Position player in the cell
+                camera.position.set(0, 1.6, 0);
+            });
+
+            // Keyboard controls
+            document.addEventListener('keydown', (event) => {
+                if (!gameState.isGameActive) return;
+                
+                switch (event.code) {
+                    case 'KeyW':
+                        moveForward = true;
+                        break;
+                    case 'KeyA':
+                        moveLeft = true;
+                        break;
+                    case 'KeyS':
+                        moveBackward = true;
+                        break;
+                    case 'KeyD':
+                        moveRight = true;
+                        break;
+                    case 'Tab':
+                        toggleInventory();
+                        break;
+                    case 'KeyE':
+                        interactWithObject();
+                        break;
+                    case 'ShiftLeft':
+                        // Running - handled in movement
+                        break;
+                    case 'ControlLeft':
+                        // Sneaking - handled in movement
+                        break;
+                }
+            });
+
+            document.addEventListener('keyup', (event) => {
+                switch (event.code) {
+                    case 'KeyW':
+                        moveForward = false;
+                        break;
+                    case 'KeyA':
+                        moveLeft = false;
+                        break;
+                    case 'KeyS':
+                        moveBackward = false;
+                        break;
+                    case 'KeyD':
+                        moveRight = false;
+                        break;
+                }
+            });
+
+            // Mouse look
+            document.addEventListener('mousemove', (event) => {
+                if (!gameState.isGameActive) return;
+                
+                mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+                
+                if (document.pointerLockElement === canvas) {
+                    camera.rotation.y -= event.movementX * 0.002;
+                }
+            });
+
+            // Click to lock pointer
+            canvas.addEventListener('click', () => {
+                if (gameState.isGameActive && document.pointerLockElement !== canvas) {
+                    canvas.requestPointerLock();
+                }
+            });
+
+            // Handle pointer lock changes
+            document.addEventListener('pointerlockchange', () => {
+                if (document.pointerLockElement === canvas) {
+                    canvas.style.cursor = 'none';
+                } else {
+                    canvas.style.cursor = 'auto';
+                }
+            });
+
+            // Window resize
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+        }
+
+        function toggleInventory() {
+            gameState.showInventory = !gameState.showInventory;
+            inventoryDiv.style.display = gameState.showInventory ? 'block' : 'none';
+            updateInventoryDisplay();
+        }
+
+        function updateInventoryDisplay() {
+            inventoryItemsDiv.innerHTML = '';
+            gameState.inventory.forEach(item => {
+                const itemElement = document.createElement('div');
+                itemElement.className = 'inventory-item';
+                itemElement.textContent = item.name;
+                itemElement.addEventListener('click', () => {
+                    showItemDescription(item);
+                });
+                inventoryItemsDiv.appendChild(itemElement);
+            });
+        }
+
+        function showItemDescription(item) {
+            dialogueBox.textContent = item.description || 'Обычный предмет.';
+            setTimeout(() => {
+                dialogueBox.textContent = '';
+            }, 3000);
+        }
+
+        function interactWithObject() {
+            if (gameState.interactingObject) {
+                handleObjectInteraction(gameState.interactingObject);
+            }
+        }
+
+        function handleObjectInteraction(object) {
+            // Determine what object was clicked and handle interaction
+            const objName = object.geometry.type;
+            
+            if (objName.includes('PlaneGeometry') && object.position.y > 2) {
+                // Window interaction
+                showDialogue("Высоко. Надо что-то подставить.");
+            } else if (objName.includes('BoxGeometry') && 
+                      Math.abs(object.position.x) < 0.5 && 
+                      Math.abs(object.position.z - 3) < 0.5) {
+                // Table interaction
+                showDialogue("Макрофасты какие-то... несвежие. Но есть хочется.");
+            } else if (objName.includes('CylinderGeometry') && 
+                      Math.abs(object.position.x - 3) < 1 && 
+                      Math.abs(object.position.z) < 1) {
+                // Rags/chest interaction
+                if (!gameState.hasRustyRod) {
+                    // Find the rod and diary in the scene
+                    scene.children.forEach(child => {
+                        if (child.geometry && child.geometry.type.includes('CylinderGeometry')) {
+                            if (child.material && child.material.color.getHex() === 0x8B4513) {
+                                // This is our rusty rod
+                                child.visible = true;
+                                child.position.set(2.5, 0.5, 0.5); // Move to visible position
+                                gameState.hasRustyRod = true;
+                                gameState.inventory.push({
+                                    name: "Ржавый прут",
+                                    description: "Тяжелый металлический прут. Может пригодиться как оружие."
+                                });
+                                showDialogue("Нашел ржавый прут! Пригодится для защиты.");
+                                updateInventoryDisplay();
+                            }
+                        }
+                        if (child.geometry && child.geometry.type.includes('PlaneGeometry')) {
+                            if (child.material && child.material.color.getHex() === 0xF5DEB3) {
+                                // This is our diary page
+                                child.visible = true;
+                                child.position.set(2.5, 0.7, 0.5);
+                                gameState.hasDiaryPage = true;
+                                gameState.inventory.push({
+                                    name: "Страница из дневника",
+                                    description: '"Дорогой дневник! Меня зовут Валера. Третий день тут. Эпштейн этот — конченый. Патрик вообще бешеный. Лодка в подвале на улице, но ключ у акулы. Я думал сбежать через окно, но там решетка. Надо искать чем ее открыть. Или сломать. Пойду поищу трубу или что потяжелее. Если меня сожрут — знайте, ключ в акуле. Аминь."'
+                                });
+                                updateInventoryDisplay();
+                            }
+                        }
+                    });
+                }
+            } else if (objName.includes('BoxGeometry') && 
+                      Math.abs(object.position.x) < 4 && 
+                      Math.abs(object.position.z - 3) < 4 &&
+                      object.position.y < 0.5) {
+                // Bed interaction
+                showDialogue("Хоть бы подушку дали, скоты. Спал как на вокзале.");
+            }
+        }
+
+        function showDiaryEntry() {
+            const diaryScreen = document.createElement('div');
+            diaryScreen.id = 'diaryScreen';
+            diaryScreen.className = 'screen';
+            diaryScreen.innerHTML = `
+                <div class="journal-entry">
+                    <h3>Запись из дневника</h3>
+                    <p>"Дорогой дневник! Меня зовут Валера. Третий день тут. Эпштейн этот — конченый. Патрик вообще бешеный. Лодка в подвале на улице, но ключ у акулы. Я думал сбежать через окно, но там решетка. Надо искать чем ее открыть. Или сломать. Пойду поищу трубу или что потяжелее. Если меня сожру — знайте, ключ в акуле. Аминь."</p>
+                    <button id="closeDiary">ПОНЯТНО</button>
+                </div>
+            `;
+            document.body.appendChild(diaryScreen);
+            
+            document.getElementById('closeDiary').addEventListener('click', () => {
+                document.body.removeChild(diaryScreen);
+                // Allow breaking the window now
+                gameState.canBreakWindow = true;
+            });
+        }
+
+        function showDialogue(text) {
+            dialogueBox.textContent = text;
+            setTimeout(() => {
+                dialogueBox.textContent = '';
+            }, 3000);
+        }
+
+        function checkIntersections() {
+            if (!gameState.isGameActive) return;
+            
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(objects);
+            
+            if (intersects.length > 0) {
+                gameState.interactingObject = intersects[0].object;
+                interactionHint.style.display = 'block';
+            } else {
+                gameState.interactingObject = null;
+                interactionHint.style.display = 'none';
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            if (gameState.isGameActive) {
+                const time = performance.now();
+                const delta = (time - prevTime) / 1000;
+
+                // Movement
+                velocity.x -= velocity.x * 10.0 * delta;
+                velocity.z -= velocity.z * 10.0 * delta;
+                velocity.y -= 9.8 * 100.0 * delta; // gravity
+
+                direction.z = Number(moveForward) - Number(moveBackward);
+                direction.x = Number(moveRight) - Number(moveLeft);
+                direction.normalize();
+
+                if (moveForward || moveBackward) velocity.z -= direction.z * 400.0 * delta;
+                if (moveLeft || moveRight) velocity.x -= direction.x * 400.0 * delta;
+
+                camera.translateX(velocity.x * delta);
+                camera.translateY(velocity.y * delta);
+                camera.translateZ(velocity.z * delta);
+
+                if (camera.position.y < 1.6) {
+                    camera.position.y = 1.6;
+                    velocity.y = 0;
+                }
+
+                prevTime = time;
+            }
+            
+            checkIntersections();
+            renderer.render(scene, camera);
+        }
+
+        // Start the game when loaded
+        window.onload = init;
+    </script>
+</body>
+</html>
