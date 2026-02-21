@@ -533,7 +533,18 @@
             
             if (objName.includes('PlaneGeometry') && object.position.y > 2) {
                 // Window interaction
-                showDialogue("Высоко. Надо что-то подставить.");
+                if (gameState.hasRustyRod) {
+                    // Player can now break the window
+                    showDialogue("Вы ломаете решетку ржавым прутом!");
+                    setTimeout(() => {
+                        // Change location to backyard
+                        gameState.currentLocation = 'backyard';
+                        createBackyardEnvironment();
+                        camera.position.set(0, 1.6, 0); // Reset position for new area
+                    }, 2000);
+                } else {
+                    showDialogue("Высоко. Надо что-то подставить.");
+                }
             } else if (objName.includes('BoxGeometry') && 
                       Math.abs(object.position.x) < 0.5 && 
                       Math.abs(object.position.z - 3) < 0.5) {
@@ -571,6 +582,7 @@
                                     description: '"Дорогой дневник! Меня зовут Валера. Третий день тут. Эпштейн этот — конченый. Патрик вообще бешеный. Лодка в подвале на улице, но ключ у акулы. Я думал сбежать через окно, но там решетка. Надо искать чем ее открыть. Или сломать. Пойду поищу трубу или что потяжелее. Если меня сожрут — знайте, ключ в акуле. Аминь."'
                                 });
                                 updateInventoryDisplay();
+                                showDiaryEntry();
                             }
                         }
                     });
@@ -582,6 +594,520 @@
                 // Bed interaction
                 showDialogue("Хоть бы подушку дали, скоты. Спал как на вокзале.");
             }
+        }
+        
+        function createBackyardEnvironment() {
+            // Clear existing objects
+            while(scene.children.length > 0){ 
+                scene.remove(scene.children[0]); 
+            }
+            objects = [];
+            
+            // Ground
+            const groundGeometry = new THREE.PlaneGeometry(20, 20);
+            const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.9 });
+            const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+            ground.rotation.x = -Math.PI / 2;
+            ground.position.y = 0;
+            scene.add(ground);
+            objects.push(ground);
+            
+            // House wall
+            const houseWallGeometry = new THREE.BoxGeometry(10, 5, 0.5);
+            const houseWallMaterial = new THREE.MeshStandardMaterial({ color: 0x664422, roughness: 0.8 });
+            const houseWall = new THREE.Mesh(houseWallGeometry, houseWallMaterial);
+            houseWall.position.z = -8;
+            houseWall.position.y = 2.5;
+            scene.add(houseWall);
+            objects.push(houseWall);
+            
+            // Clutter pile
+            const clutterGeometry = new THREE.CylinderGeometry(1.5, 1.5, 0.5, 16);
+            const clutterMaterial = new THREE.MeshStandardMaterial({ color: 0x777777, roughness: 0.9 });
+            const clutter = new THREE.Mesh(clutterGeometry, clutterMaterial);
+            clutter.position.set(3, 0.25, 3);
+            scene.add(clutter);
+            objects.push(clutter);
+            
+            // Sofa
+            const sofaGeometry = new THREE.BoxGeometry(2, 0.8, 0.8);
+            const sofaMaterial = new THREE.MeshStandardMaterial({ color: 0x444444 });
+            const sofa = new THREE.Mesh(sofaGeometry, sofaMaterial);
+            sofa.position.set(3, 0.4, 2.5);
+            scene.add(sofa);
+            objects.push(sofa);
+            
+            // Barrel
+            const barrelGeometry = new THREE.CylinderGeometry(0.6, 0.6, 1.2, 16);
+            const barrelMaterial = new THREE.MeshStandardMaterial({ color: 0x333333 });
+            const barrel = new THREE.Mesh(barrelGeometry, barrelMaterial);
+            barrel.position.set(-3, 0.6, 3);
+            scene.add(barrel);
+            objects.push(barrel);
+            
+            // Kalash sticking out of ground
+            const kalashGeometry = new THREE.BoxGeometry(0.1, 1.2, 0.05);
+            const kalashMaterial = new THREE.MeshStandardMaterial({ color: 0x555555 });
+            const kalash = new THREE.Mesh(kalashGeometry, kalashMaterial);
+            kalash.position.set(0, 0.6, -5);
+            scene.add(kalash);
+            objects.push(kalash);
+            
+            // Underground part of kalash
+            const undergroundPart = new THREE.BoxGeometry(0.1, 0.8, 0.05);
+            const undergroundMaterial = new THREE.MeshStandardMaterial({ color: 0x444444 });
+            const underground = new THREE.Mesh(undergroundPart, undergroundMaterial);
+            underground.position.set(0, -0.2, -5);
+            underground.rotation.x = Math.PI / 4;
+            scene.add(underground);
+            
+            // Sky
+            const skyGeometry = new THREE.SphereGeometry(500, 32, 32);
+            const skyMaterial = new THREE.MeshBasicMaterial({
+                color: 0x000033,
+                side: THREE.BackSide
+            });
+            const sky = new THREE.Mesh(skyGeometry, skyMaterial);
+            scene.add(sky);
+            
+            // Moon
+            const moonGeometry = new THREE.SphereGeometry(5, 16, 16);
+            const moonMaterial = new THREE.MeshBasicMaterial({ color: 0xFFFFCC });
+            const moon = new THREE.Mesh(moonGeometry, moonMaterial);
+            moon.position.set(10, 15, -20);
+            scene.add(moon);
+            
+            // Ocean in the distance
+            const oceanGeometry = new THREE.PlaneGeometry(40, 10);
+            const oceanMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0x0000AA,
+                transparent: true,
+                opacity: 0.8
+            });
+            const ocean = new THREE.Mesh(oceanGeometry, oceanMaterial);
+            ocean.rotation.x = -Math.PI / 2;
+            ocean.position.set(0, 0.1, 8);
+            scene.add(ocean);
+            
+            // Shore area
+            const shoreGeometry = new THREE.PlaneGeometry(10, 4);
+            const shoreMaterial = new THREE.MeshStandardMaterial({ color: 0xCCCC66 });
+            const shore = new THREE.Mesh(shoreGeometry, shoreMaterial);
+            shore.rotation.x = -Math.PI / 2;
+            shore.position.set(0, 0.05, 5);
+            scene.add(shore);
+            
+            // Add sharks to the shore
+            createSharks();
+        }
+        
+        function createSharks() {
+            // Create 3 sharks near the shore
+            for (let i = 0; i < 3; i++) {
+                const sharkGeometry = new THREE.ConeGeometry(0.8, 2, 8);
+                const sharkMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0x222222,
+                    metalness: 0.3,
+                    roughness: 0.7
+                });
+                const shark = new THREE.Mesh(sharkGeometry, sharkMaterial);
+                
+                // Position sharks at different spots near the shore
+                shark.position.set(-2 + i * 2, 0.2, 6);
+                shark.rotation.y = Math.PI;
+                scene.add(shark);
+                
+                // Store shark info for tracking
+                shark.userData = { 
+                    type: 'shark',
+                    isTarget: i === 1, // Mark one as the target shark with the key
+                    health: 100,
+                    moving: true
+                };
+                
+                objects.push(shark);
+            }
+        }
+        
+        function handleObjectInteraction(object) {
+            // Determine what object was clicked and handle interaction
+            const objName = object.geometry.type;
+            
+            if (gameState.currentLocation === 'cell') {
+                if (objName.includes('PlaneGeometry') && object.position.y > 2) {
+                    // Window interaction
+                    if (gameState.hasRustyRod) {
+                        // Player can now break the window
+                        showDialogue("Вы ломаете решетку ржавым прутом!");
+                        setTimeout(() => {
+                            // Change location to backyard
+                            gameState.currentLocation = 'backyard';
+                            createBackyardEnvironment();
+                            camera.position.set(0, 1.6, 0); // Reset position for new area
+                        }, 2000);
+                    } else {
+                        showDialogue("Высоко. Надо что-то подставить.");
+                    }
+                } else if (objName.includes('BoxGeometry') && 
+                          Math.abs(object.position.x) < 0.5 && 
+                          Math.abs(object.position.z - 3) < 0.5) {
+                    // Table interaction
+                    showDialogue("Макрофасты какие-то... несвежие. Но есть хочется.");
+                } else if (objName.includes('CylinderGeometry') && 
+                          Math.abs(object.position.x - 3) < 1 && 
+                          Math.abs(object.position.z) < 1) {
+                    // Rags/chest interaction
+                    if (!gameState.hasRustyRod) {
+                        // Find the rod and diary in the scene
+                        scene.children.forEach(child => {
+                            if (child.geometry && child.geometry.type.includes('CylinderGeometry')) {
+                                if (child.material && child.material.color.getHex() === 0x8B4513) {
+                                    // This is our rusty rod
+                                    child.visible = true;
+                                    child.position.set(2.5, 0.5, 0.5); // Move to visible position
+                                    gameState.hasRustyRod = true;
+                                    gameState.inventory.push({
+                                        name: "Ржавый прут",
+                                        description: "Тяжелый металлический прут. Может пригодиться как оружие."
+                                    });
+                                    showDialogue("Нашел ржавый прут! Пригодится для защиты.");
+                                    updateInventoryDisplay();
+                                }
+                            }
+                            if (child.geometry && child.geometry.type.includes('PlaneGeometry')) {
+                                if (child.material && child.material.color.getHex() === 0xF5DEB3) {
+                                    // This is our diary page
+                                    child.visible = true;
+                                    child.position.set(2.5, 0.7, 0.5);
+                                    gameState.hasDiaryPage = true;
+                                    gameState.inventory.push({
+                                        name: "Страница из дневника",
+                                        description: '"Дорогой дневник! Меня зовут Валера. Третий день тут. Эпштейн этот — конченый. Патрик вообще бешеный. Лодка в подвале на улице, но ключ у акулы. Я думал сбежать через окно, но там решетка. Надо искать чем ее открыть. Или сломать. Пойду поищу трубу или что потяжелее. Если меня сожру — знайте, ключ в акуле. Аминь."'
+                                    });
+                                    updateInventoryDisplay();
+                                    showDiaryEntry();
+                                }
+                            }
+                        });
+                    }
+                } else if (objName.includes('BoxGeometry') && 
+                          Math.abs(object.position.x) < 4 && 
+                          Math.abs(object.position.z - 3) < 4 &&
+                          object.position.y < 0.5) {
+                    // Bed interaction
+                    showDialogue("Хоть бы подушку дали, скоты. Спал как на вокзале.");
+                }
+            } else if (gameState.currentLocation === 'backyard') {
+                if (objName.includes('BoxGeometry') && 
+                   Math.abs(object.position.x) < 0.1 && 
+                   Math.abs(object.position.z + 5) < 0.2) {
+                    // Kalash interaction
+                    if (!gameState.hasKalash) {
+                        showDialogue("Вы выкапываете автомат! Нужно несколько раз нажать E...");
+                        gameState.diggingKalash = 0; // Counter for digging action
+                    } else {
+                        showDialogue("Здесь больше ничего нет.");
+                    }
+                } else if (objName.includes('ConeGeometry') && 
+                          object.userData && 
+                          object.userData.type === 'shark') {
+                    // Shark interaction
+                    if (!gameState.hasKalash) {
+                        showDialogue("Без оружия лучше не связываться с акулой...");
+                    } else {
+                        // Attack shark
+                        object.userData.health -= 33; // Each shot does 33 damage
+                        
+                        if (object.userData.health <= 0) {
+                            if (object.userData.isTarget) {
+                                // This is the target shark with the key
+                                showDialogue("Вы убили нужную акулу! Ключ выпал из нее!");
+                                gameState.hasKey = true;
+                                
+                                // Add key to inventory
+                                gameState.inventory.push({
+                                    name: "Ключ от подвала",
+                                    description: "Ключ, который был в акуле. Нужен для доступа к лодке."
+                                });
+                                updateInventoryDisplay();
+                                
+                                // Remove the shark from the scene
+                                scene.remove(object);
+                                objects.splice(objects.indexOf(object), 1);
+                                
+                                // Show special effect for key
+                                showKeyEffect();
+                            } else {
+                                showDialogue("Акула мертва.");
+                                // Remove the shark from the scene
+                                scene.remove(object);
+                                objects.splice(objects.indexOf(object), 1);
+                            }
+                        } else {
+                            showDialogue("Акула получила урон!");
+                        }
+                    }
+                } else if (objName.includes('CylinderGeometry') && 
+                          Math.abs(object.position.x + 3) < 0.7 && 
+                          Math.abs(object.position.z - 3) < 0.7) {
+                    // Barrel interaction
+                    showDialogue("Бочка с дождевой водой. Можно напиться, но особо не поможет.");
+                } else if (Math.abs(object.position.x - 3) < 1.1 && 
+                          Math.abs(object.position.z - 2.5) < 0.9) {
+                    // Sofa interaction - reveals the basement entrance
+                    if (gameState.hasKey) {
+                        // Player has the key, can open the basement
+                        showDialogue("Вы открываете люк ключом! Пора спускаться в подвал...");
+                        setTimeout(() => {
+                            // Change location to basement
+                            gameState.currentLocation = 'basement';
+                            createBasementEnvironment();
+                            camera.position.set(0, 1.6, 0); // Reset position for new area
+                        }, 2000);
+                    } else {
+                        showDialogue("Под диваном что-то блестит... Это люк! Нужен ключ, чтобы открыть.");
+                    }
+                }
+            }
+        }
+        
+        function createBasementEnvironment() {
+            // Clear existing objects
+            while(scene.children.length > 0){ 
+                scene.remove(scene.children[0]); 
+            }
+            objects = [];
+            
+            // Ground
+            const groundGeometry = new THREE.BoxGeometry(10, 0.2, 10);
+            const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x444444, roughness: 0.9 });
+            const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+            ground.position.y = 0;
+            scene.add(ground);
+            objects.push(ground);
+            
+            // Walls
+            const wallMaterial = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.9 });
+            
+            // Back wall
+            const backWall = new THREE.Mesh(
+                new THREE.BoxGeometry(10, 3, 0.2),
+                wallMaterial
+            );
+            backWall.position.z = -5;
+            backWall.position.y = 1.5;
+            scene.add(backWall);
+            objects.push(backWall);
+            
+            // Left wall
+            const leftWall = new THREE.Mesh(
+                new THREE.BoxGeometry(0.2, 3, 10),
+                wallMaterial
+            );
+            leftWall.position.x = -5;
+            leftWall.position.y = 1.5;
+            scene.add(leftWall);
+            objects.push(leftWall);
+            
+            // Right wall
+            const rightWall = new THREE.Mesh(
+                new THREE.BoxGeometry(0.2, 3, 10),
+                wallMaterial
+            );
+            rightWall.position.x = 5;
+            rightWall.position.y = 1.5;
+            scene.add(rightWall);
+            objects.push(rightWall);
+            
+            // Front wall (with opening where stairs lead down)
+            const frontWall = new THREE.Mesh(
+                new THREE.BoxGeometry(10, 3, 0.2),
+                wallMaterial
+            );
+            frontWall.position.z = 5;
+            frontWall.position.y = 1.5;
+            scene.add(frontWall);
+            objects.push(frontWall);
+            
+            // Ceiling
+            const ceiling = new THREE.Mesh(
+                new THREE.BoxGeometry(10, 0.2, 10),
+                wallMaterial
+            );
+            ceiling.position.y = 3;
+            scene.add(ceiling);
+            objects.push(ceiling);
+            
+            // Boat
+            const boatGeometry = new THREE.CylinderGeometry(0.8, 1.2, 3, 16);
+            const boatMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513, roughness: 0.8 });
+            const boat = new THREE.Mesh(boatGeometry, boatMaterial);
+            boat.position.set(0, 0.8, 0);
+            boat.rotation.x = Math.PI / 2;
+            scene.add(boat);
+            objects.push(boat);
+            
+            // Boat trailer/chassis
+            const trailerGeometry = new THREE.BoxGeometry(2.5, 0.3, 4);
+            const trailerMaterial = new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.7 });
+            const trailer = new THREE.Mesh(trailerGeometry, trailerMaterial);
+            trailer.position.set(0, 0.15, 0);
+            scene.add(trailer);
+            objects.push(trailer);
+            
+            // Chain holding the boat
+            const chainGeometry = new THREE.TorusGeometry(0.3, 0.05, 16, 32);
+            const chainMaterial = new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.5, roughness: 0.5 });
+            const chain1 = new THREE.Mesh(chainGeometry, chainMaterial);
+            chain1.position.set(-1, 2.5, 0);
+            scene.add(chain1);
+            objects.push(chain1);
+            
+            const chain2 = new THREE.Mesh(chainGeometry, chainMaterial);
+            chain2.position.set(1, 2.5, 0);
+            scene.add(chain2);
+            objects.push(chain2);
+            
+            // Boxes and crates around
+            const crateGeometry = new THREE.BoxGeometry(1, 1, 1);
+            const crateMaterial = new THREE.MeshStandardMaterial({ color: 0x666666, roughness: 0.8 });
+            
+            for (let i = 0; i < 5; i++) {
+                const crate = new THREE.Mesh(crateGeometry, crateMaterial);
+                crate.position.set(-3 + i * 1.5, 0.5, -3);
+                scene.add(crate);
+                objects.push(crate);
+            }
+            
+            // Dim lighting
+            const ambientLight = new THREE.AmbientLight(0x404040);
+            scene.add(ambientLight);
+            
+            const basementLight = new THREE.PointLight(0xFF9900, 1, 10);
+            basementLight.position.set(0, 2, 0);
+            scene.add(basementLight);
+            
+            // Add Epstain character
+            createEpstainCharacter();
+        }
+        
+        function createEpstainCharacter() {
+            // Create a simple representation of Epstain
+            const bodyGeometry = new THREE.CylinderGeometry(0.3, 0.3, 1.2, 16);
+            const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x222222 });
+            const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            body.position.set(2, 0.8, -2);
+            scene.add(body);
+            
+            const headGeometry = new THREE.SphereGeometry(0.4, 16, 16);
+            const headMaterial = new THREE.MeshStandardMaterial({ color: 0xDDDDDD });
+            const head = new THREE.Mesh(headGeometry, headMaterial);
+            head.position.set(2, 1.6, -2);
+            scene.add(head);
+            
+            // Add weapon (AK-47)
+            const weaponGeometry = new THREE.BoxGeometry(0.1, 0.8, 0.2);
+            const weaponMaterial = new THREE.MeshStandardMaterial({ color: 0x555555 });
+            const weapon = new THREE.Mesh(weaponGeometry, weaponMaterial);
+            weapon.position.set(2.3, 1.2, -2);
+            scene.add(weapon);
+            
+            // Store Epstain as a special object
+            body.userData = { type: 'epstain' };
+            objects.push(body);
+            
+            // Add dialogue trigger
+            setTimeout(() => {
+                showDialogue("Ну здравствуй, саратовский. Долго ты возился. Я уж думал, ты там с Валерой останешься, но ты молодец, выбрался. И акулу мою любимую завалил. Жалко акулу, хорошая была, умная... почти как Патрик, только не жрала постоянно");
+            }, 3000);
+            
+            // After some time, show the ending
+            setTimeout(() => {
+                showDialogue("Но лодку я тебе не отдам. Зачем мне лишние свидетели? Ты и так уже слишком много знаешь. И про остров, и про Патрика, и про акул этих долбаных... Придется тебя оставить здесь. Навсегда");
+            }, 8000);
+            
+            setTimeout(() => {
+                showDialogue("В темноте не видно, кто ты: жертва или охотник. Но Патрику поебать. Он просто хочет жрать.");
+            }, 13000);
+            
+            // Final screen transition
+            setTimeout(() => {
+                showEndScreen();
+            }, 16000);
+        }
+        
+        function showEndScreen() {
+            const endScreen = document.createElement('div');
+            endScreen.id = 'endScreen';
+            endScreen.className = 'screen';
+            endScreen.style.backgroundColor = 'rgba(0, 0, 0, 0.9)';
+            endScreen.innerHTML = `
+                <div class="journal-entry">
+                    <h2>САРАТОВСКИЙ АРХИПЕЛАГ</h2>
+                    <h3>Часть 2: Треники Патрика</h3>
+                    <p style="margin-top: 30px;">В темноте не видно, кто ты: жертва или охотник.</p>
+                    <p>Но Патрику поебать. Он просто хочет жрать.</p>
+                    <p style="margin-top: 50px; font-size: 14px; color: #888;">Спасибо за игру! Следующая часть будет доступна позже...</p>
+                </div>
+            `;
+            document.body.appendChild(endScreen);
+        }
+        
+        function showKeyEffect() {
+            // Visual effect for finding the key
+            const keyEffect = document.createElement('div');
+            keyEffect.style.position = 'absolute';
+            keyEffect.style.top = '40%';
+            keyEffect.style.left = '50%';
+            keyEffect.style.transform = 'translate(-50%, -50%)';
+            keyEffect.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+            keyEffect.style.color = 'white';
+            keyEffect.style.padding = '20px';
+            keyEffect.style.borderRadius = '10px';
+            keyEffect.style.fontSize = '24px';
+            keyEffect.style.zIndex = '100';
+            keyEffect.style.textAlign = 'center';
+            keyEffect.innerHTML = '<p>Ключ выпал из акулы!</p>';
+            
+            document.getElementById('ui').appendChild(keyEffect);
+            
+            setTimeout(() => {
+                document.getElementById('ui').removeChild(keyEffect);
+            }, 3000);
+        }
+        
+        function update() {
+            // Update game logic
+            if (gameState.currentLocation === 'backyard' && gameState.hasKalash) {
+                // Make sharks move slightly to simulate swimming
+                objects.forEach(obj => {
+                    if (obj.userData && obj.userData.type === 'shark' && obj.userData.moving) {
+                        // Simple movement to simulate swimming
+                        obj.position.z += Math.sin(Date.now() * 0.001 + obj.position.x) * 0.01;
+                        obj.rotation.z = Math.sin(Date.now() * 0.002 + obj.position.x) * 0.05;
+                    }
+                });
+            }
+        }
+        
+        function showDiaryEntry() {
+            const diaryScreen = document.createElement('div');
+            diaryScreen.id = 'diaryScreen';
+            diaryScreen.className = 'screen';
+            diaryScreen.innerHTML = `
+                <div class="journal-entry">
+                    <h3>Запись из дневника</h3>
+                    <p>"Дорогой дневник! Меня зовут Валера. Третий день тут. Эпштейн этот — конченый. Патрик вообще бешеный. Лодка в подвале на улице, но ключ у акулы. Я думал сбежать через окно, но там решетка. Надо искать чем ее открыть. Или сломать. Пойду поищу трубу или что потяжелее. Если меня сожру — знайте, ключ в акуле. Аминь."</p>
+                    <button id="closeDiary">ПОНЯТНО</button>
+                </div>
+            `;
+            document.body.appendChild(diaryScreen);
+            
+            document.getElementById('closeDiary').addEventListener('click', () => {
+                document.body.removeChild(diaryScreen);
+                // Allow breaking the window now
+                gameState.canBreakWindow = true;
+            });
         }
 
         function showDiaryEntry() {
@@ -655,9 +1181,43 @@
                 }
 
                 prevTime = time;
+                
+                // Handle digging action for kalash
+                if (gameState.currentLocation === 'backyard' && 
+                    gameState.diggingKalash !== undefined && 
+                    gameState.diggingKalash < 5) {
+                    
+                    // Check if player is still looking at the kalash
+                    raycaster.setFromCamera(new THREE.Vector2(), camera);
+                    const intersects = raycaster.intersectObjects(objects);
+                    
+                    if (intersects.length > 0 && 
+                        intersects[0].object.geometry.type.includes('BoxGeometry') &&
+                        Math.abs(intersects[0].object.position.x) < 0.1 && 
+                        Math.abs(intersects[0].object.position.z + 5) < 0.2) {
+                        
+                        // Continue digging
+                        gameState.diggingKalash++;
+                        if (gameState.diggingKalash === 5) {
+                            // Finished digging
+                            gameState.hasKalash = true;
+                            showDialogue("Вы выкопали автомат! Теперь у вас есть оружие!");
+                            
+                            // Add kalash to inventory
+                            gameState.inventory.push({
+                                name: "Калашников",
+                                description: "Автомат Калашникова. Обычный, советский. Но в хороших руках - смертельно опасен."
+                            });
+                            updateInventoryDisplay();
+                        } else {
+                            showDialogue(`Вы выкапываете автомат! Нужно ещё ${5 - gameState.diggingKalash} раз нажать E...`);
+                        }
+                    }
+                }
             }
             
             checkIntersections();
+            update(); // Call update function for game logic
             renderer.render(scene, camera);
         }
 
